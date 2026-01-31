@@ -9,7 +9,7 @@ pip install transformer_lens
 models to be tested:
 - phi-1.5
 - TinyLlama-1.1B (or Llama-3-8B if I can get a hold of compute resources)
-- Qwen-2.5-1.5B (or Qwen=2.5-3B)
+- Qwen-2.5-1.5B (or Qwen-2.5-3B)
 - Gemma-2-2B
 
 4 task types

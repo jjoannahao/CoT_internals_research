@@ -42,19 +42,22 @@ Reasoning:
 A:
 """
 
-gen = MechanisticTaskGenerator(seed=42)
-sample_dataset = []
-for i in range(4):
-    sample_dataset.append(gen.generate_linear_pair())
-    sample_dataset.append(gen.generate_cblg_pair())
-    sample_dataset.append(gen.generate_multiway_pair())
-    sample_dataset.append(gen.generate_parity_pat_pair())
-
-
-
-phi_runner = CoTBaselineRunner()
-output = phi_runner.model.generate(cot_prompt, max_new_tokens=50, temperature=0)
-print(output)
+if __name__ == "__main__":
+    gen = MechanisticTaskGenerator(seed=42)
+    # set up test dataset
+    sample_dataset = []
+    for i in range(4):
+        sample_dataset.append(gen.generate_linear_pair())
+        sample_dataset.append(gen.generate_cblg_pair())
+        sample_dataset.append(gen.generate_multiway_pair())
+        sample_dataset.append(gen.generate_parity_pat_pair())
+    
+    print()
+    
+    # check CoT
+    phi_runner = CoTBaselineRunner()
+    output = phi_runner.model.generate(cot_prompt, max_new_tokens=50, temperature=0)
+    print(output)
 
 # --- results in output file:
 # phi_runner.run_baseline(sample_dataset, output_file="gpt2_xl_baseline.jsonl")
