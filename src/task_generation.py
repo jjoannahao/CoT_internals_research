@@ -62,7 +62,11 @@ class MechanisticTaskGenerator:
             "task_class": "linear_symbolic",
             "clean": {"prompt": clean_prompt, "answer": str(ans_c), "x_val": x_clean},
             "corrupt": {"prompt": corrupt_prompt, "answer": str(ans_corr), "x_val": x_corrupt},
-            "patching_target": "x_value" # This tells you what mechanism you are isolating
+            "patching_target": "x_value", # This tells you what mechanism you are isolating
+            "abstract_map": {
+                "primary_components": ["Operation 1 Head", "Operation 2 Head"],
+                "reasoning_template": "Use {Operation 1 Head} to calculate the first step. Then use {Operation 2 Head} to find the final answer."
+            }
         }
 
     # -------------------------------------------------------------------------
@@ -105,7 +109,11 @@ class MechanisticTaskGenerator:
                 "answer": str(ans_corrupt),
                 "gate_state": "Odd"
             },
-            "patching_target": "parity_gate"
+            "patching_target": "parity_gate",
+            "abstract_map": {
+                "primary_components": ["Parity Check Head", "Branch Arithmetic Head"],
+                "reasoning_template": ["First, use {Parity Check Head} to check if the number is even. Then, use {Branch Arithmetic Head} to calculate the result."]
+            }
         }
 
     # -------------------------------------------------------------------------
@@ -174,7 +182,11 @@ class MechanisticTaskGenerator:
                 "selector_val": mod_corrupt,
                 "active_op": ["add", "multiply", "subtract"][mod_corrupt]
             },
-            "patching_target": "modulo_selector"
+            "patching_target": "modulo_selector",
+            "abstract_map": {
+                "primary_components": ["Modulo Selector Head", "Arithmetic Operation Head"],
+                "reasoning_template": "Calculate the remainder using {Modulo Selector Head}. Then perform the selected operation using {Arithmetic Operation Head}."
+            }
         }
 
     # -------------------------------------------------------------------------
@@ -241,5 +253,9 @@ class MechanisticTaskGenerator:
                 "prompt": build_str(predicates, p5_corrupt),
                 "answer": ans_corrupt
             },
-            "patching_target": "predicate_5_validity"
+            "patching_target": "predicate_5_validity",
+            "abstract_map": {
+                "primary_components": ["Predicate Check Head", "Aggregator Head"],
+                "reasoning_template": "Check each number using {Predicate Check Head}. Then count the total True values using {Aggregator Head}."
+            }
         }
