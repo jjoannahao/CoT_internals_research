@@ -1,0 +1,18 @@
+# json
+# random
+
+# PyTorch & HuggingFace
+torch
+huggingface-hub
+
+# transformer-lens and dependencies
+transformer-lens
+einops
+fancy-einsum
+jaxtyping
+
+# utilities
+tqdm
+
+# visualization
+matplotlib
