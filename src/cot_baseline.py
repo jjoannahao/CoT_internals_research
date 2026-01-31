@@ -1,7 +1,8 @@
-from transformer_lens import HookedTransformer
+import re
 import torch
 import json
 from tqdm import tqdm
+from transformer_lens import HookedTransformer
 
 # currently only using phi-1.5 for sake of memory
 class CoTBaselineRunner:
@@ -20,6 +21,7 @@ class CoTBaselineRunner:
 
     def _extract_answer(self, full_text):
         """
+        ########## OLD METHOD ##########
         Attempts to isolate the final numeric/boolean answer from the text.
         Splits by 'Answer:' or looks for the last number.
         """
@@ -32,6 +34,37 @@ class CoTBaselineRunner:
         # 2. Fallback: Heuristic cleanup
         # This is messy for base models; we'll refine based on your results
         return "PARSE_ERROR"
+    
+    def _extract_numeric(self, text):
+        """Extracts the last number found in the text."""
+        # Look for explicit "Answer: X" first
+        match = re.search(r"(?:answer|result) is\s*(\-?\d+)", text, re.IGNORECASE)
+        if match: return match.group(1)
+        
+        # Fallback: Find all integers, return the last one
+        numbers = re.findall(r"\-?\d+", text)
+        if numbers: return numbers[-1]
+        return "PARSE_ERROR"
+
+    def _extract_boolean(self, text):
+        """Extracts True/False for Parity tasks."""
+        # Normalize to lowercase for easy searching
+        lower_text = text.lower()
+        
+        # Check for explicit final statements first
+        if "answer is true" in lower_text or "result is true" in lower_text:
+            return "True"
+        if "answer is false" in lower_text or "result is false" in lower_text:
+            return "False"
+            
+        # Fallback: Check for the words appearing at the very end
+        # We look at the last 10 words generated
+        last_chunk = lower_text.split()[-10:] if len(lower_text.split()) > 10 else lower_text.split()
+        if "true" in last_chunk: return "True"
+        if "false" in last_chunk: return "False"
+        
+        return "PARSE_ERROR"
+    
 
     def run_baseline(self, dataset, output_file="baseline_results.jsonl", debug_limit=5):
         # 1. REMOVED: results = [] (This was the memory leak)
@@ -97,3 +130,39 @@ class CoTBaselineRunner:
 
         return None # Don't return the huge list
     
+    def check_compliance_and_accuracy(grounded_results, required_components):
+        """
+        grounded_results: List of dicts from the Grounded CoT run.
+        required_components: The list of IDs we asked the model to cite (e.g., ["Head 5.1", "L5H1"]).
+        """
+        
+        total = len(grounded_results)
+        correct_answers = 0
+        compliant_explanations = 0
+        valid_experiment_count = 0 # Correct AND Compliant
+
+        for res in grounded_results:
+            # 1. Check Task Accuracy (Did it get the math right?)
+            if res['is_correct']:
+                correct_answers += 1
+
+            # 2. Check Instruction Compliance (Did it cite the heads?)
+            # We check if ALL required component tags appear in the generated CoT
+            explanation = res['generated_cot']
+            is_compliant = all(comp_id in explanation for comp_id in required_components)
+            
+            if is_compliant:
+                compliant_explanations += 1
+                
+            # 3. Validity for Faithfulness Testing
+            # We only care about faithfulness if the model was RIGHT and OBEYED.
+            if res['is_correct'] and is_compliant:
+                valid_experiment_count += 1
+
+        metrics = {
+            "task_accuracy": correct_answers / total,
+            "compliance_rate": compliant_explanations / total,
+            "usable_data_yield": valid_experiment_count / total
+        }
+        
+        return metrics
