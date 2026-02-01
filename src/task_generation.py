@@ -1,4 +1,7 @@
 import random
+import torch
+from transformer_lens import HookedTransformer
+from transformer_lens import utils
 
 class MechanisticTaskGenerator:
     """
@@ -259,3 +262,93 @@ class MechanisticTaskGenerator:
                 "reasoning_template": "Check each number using {Predicate Check Head}. Then count the total True values using {Aggregator Head}."
             }
         }
+
+
+def generateExemplars(model, generator, task_class, num_exemplars):
+    """
+    generate examples and ientify their top causal heads to form few-shot prompt for experiments 
+    :param model: str
+    :param generator: str
+    :param task_class: str (1 of 4 defined task classes)
+    :param num_exemplars: int (number of exemplars to generate)
+    :return: list[dict] 
+    """
+    print(f">> Generating Exemplars for {task_class}...")
+    exemplars = []
+    
+    # 1. Generate Candidates
+    if task_class == "linear_symbolic":
+        # We generate pairs so we can patch
+        tasks = [generator.generate_linear_pair() for _ in range(num_exemplars)]
+    elif task_class == "CBLG":
+        tasks = [generator.generate_cblg_pair() for _ in range(num_exemplars)]
+    elif task_class == "multiway":
+        tasks = [generator.generate_multiway_pair() for _ in range(num_exemplars)]
+    elif task_class == "pat":
+        tasks = [generator.generate_parity_pat_pair() for _ in range(num_exemplars)]
+    else:
+        print(f"Error: {task_class} is not a defined task class")
+        return []
+
+    # 2. Run Rapid Patching (Abridged Version)
+    for i, task in enumerate(tasks):
+        clean_prompt = task['clean']['prompt']
+        corrupt_prompt = task['corrupt']['prompt']
+        clean_ans = task['clean']['answer']
+        corrupt_ans = task['corrupt']['answer']
+        
+        # A. Cache Clean/Corrupt
+        # Note: We assume model is already loaded in 'model'
+        logits_clean, cache_clean = model.run_with_cache(clean_prompt)
+        logits_corrupt, cache_corrupt = model.run_with_cache(corrupt_prompt)
+        
+        # B. Calculate "Clean - Corrupt" Logit Diff direction
+        # We want to restore the clean answer
+        clean_tok = model.to_single_token(clean_ans)
+        corrupt_tok = model.to_single_token(corrupt_ans)
+        
+        def get_logit_diff(logits, answer_token_index=0):
+            return logits[0, -1, clean_tok] - logits[0, -1, corrupt_tok]
+
+        base_diff = get_logit_diff(logits_clean) - get_logit_diff(logits_corrupt)
+        
+        # C. Patch Every Head (Naive Sweep)
+        # For a full experiment, you'd be more efficient, but for 3 examples, brute force is fine.
+        best_head = "Unknown"
+        best_recovery = -1.0
+        
+        n_layers = model.cfg.n_layers
+        n_heads = model.cfg.n_heads
+        
+        for layer in range(n_layers):
+            for head in range(n_heads):
+                # Hook function to swap ONE head
+                def patch_head_hook(activations, hook):
+                    activations[:, :, head, :] = cache_clean[hook.name][:, :, head, :]
+                    return activations
+                
+                # Run with hook
+                hook_name = utils.get_act_name("z", layer)
+                patched_logits = model.run_with_hooks(
+                    corrupt_prompt,
+                    fwd_hooks=[(hook_name, patch_head_hook)]
+                )
+                
+                # Check performance
+                patched_diff = get_logit_diff(patched_logits) - get_logit_diff(logits_corrupt)
+                recovery = patched_diff / base_diff
+                
+                if recovery > best_recovery:
+                    best_recovery = recovery
+                    best_head = f"L{layer}H{head}"
+
+        print(f"   Exemplar {i+1}: Found Best Head {best_head} (Recovery: {best_recovery:.2%})")
+        
+        # Save the data needed to write the prompt
+        exemplars.append({
+            "prompt_text": clean_prompt,
+            "answer": clean_ans,
+            "top_head": best_head
+        })
+
+    return exemplars
