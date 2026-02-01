@@ -4,17 +4,11 @@ import json
 from tqdm import tqdm
 from transformer_lens import HookedTransformer
 
-# currently only using phi-1.5 for sake of memory
 class CoTBaselineRunner:
-    def __init__(self, model_name="microsoft/phi-1_5", device="cuda"):
+    def __init__(self, model, model_name, device="cuda"):
         print(f">> Loading {model_name}...")
         # Loading in fp16 to save memory as requested
-        self.model = HookedTransformer.from_pretrained(
-            model_name, 
-            device=device, 
-            dtype=torch.float16,
-            fold_ln=False
-        )
+        self.model = model
         self.model_name = model_name
         self.tokenizer = self.model.tokenizer
         self.stop_tokens = ["\n\n", "Q:", "Question:", "###"]
@@ -47,7 +41,7 @@ class CoTBaselineRunner:
         return "PARSE_ERROR"
 
     def _extract_boolean(self, text):
-        """Extracts True/False for Parity tasks."""
+        """Extracts True/False for Parity PAT task"""
         # Normalize to lowercase for easy searching
         lower_text = text.lower()
         
@@ -66,9 +60,8 @@ class CoTBaselineRunner:
         return "PARSE_ERROR"
     
 
+    # TODO: update run_baseline loop to separate answer by task type
     def run_baseline(self, dataset, output_file="baseline_results.jsonl", debug_limit=5):
-        # 1. REMOVED: results = [] (This was the memory leak)
-        
         print(f">> Starting Baseline Run on {len(dataset)} tasks...")
         
         # Track errors just for the print limit
@@ -166,3 +159,4 @@ class CoTBaselineRunner:
         }
         
         return metrics
+    

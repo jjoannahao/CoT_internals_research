@@ -263,8 +263,22 @@ class MechanisticTaskGenerator:
             }
         }
 
+def generateDataset(generator, examples_per_task=500):
+    linear_dataset = [generator.generate_linear_pair() for _ in range(500)]
+    cblg_dataset = [generator.generate_cblg_pair() for _ in range(500)]
+    multiway_dataset = [generator.generate_multiway_pair() for _ in range(500)]
+    pat_dataset = [generator.generate_parity_pat_pair() for _ in range(500)]
+    
+    full_dataset = linear_dataset + cblg_dataset + multiway_dataset + pat_dataset
+    
+    random.shuffle(full_dataset)
+    
+    print(f"# --- Generated {examples_per_task} per task, for total dataset of length {len(full_dataset)}")
+    
+    return full_dataset
 
-def generateExemplars(model, generator, task_class, num_exemplars):
+
+def oldexemplars(model, generator, task_class, num_exemplars):
     """
     generate examples and ientify their top causal heads to form few-shot prompt for experiments 
     :param model: str
@@ -280,7 +294,7 @@ def generateExemplars(model, generator, task_class, num_exemplars):
     if task_class == "linear_symbolic":
         # We generate pairs so we can patch
         tasks = [generator.generate_linear_pair() for _ in range(num_exemplars)]
-    elif task_class == "CBLG":
+    elif task_class == "cblg":
         tasks = [generator.generate_cblg_pair() for _ in range(num_exemplars)]
     elif task_class == "multiway":
         tasks = [generator.generate_multiway_pair() for _ in range(num_exemplars)]
@@ -313,7 +327,6 @@ def generateExemplars(model, generator, task_class, num_exemplars):
         base_diff = get_logit_diff(logits_clean) - get_logit_diff(logits_corrupt)
         
         # C. Patch Every Head (Naive Sweep)
-        # For a full experiment, you'd be more efficient, but for 3 examples, brute force is fine.
         best_head = "Unknown"
         best_recovery = -1.0
         
